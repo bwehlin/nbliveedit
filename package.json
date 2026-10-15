@@ -44,6 +44,18 @@
           "description": "Port for the MCP HTTP server (bound to 127.0.0.1). Reload window after changing."
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "notebookLiveEdit.addTo.claude",
+        "title": "Add MCP Server to Claude Code",
+        "category": "Notebook Live Edit MCP"
+      },
+      {
+        "command": "notebookLiveEdit.addTo.codex",
+        "title": "Add MCP Server to Codex",
+        "category": "Notebook Live Edit MCP"
+      }
+    ]
   }
 }

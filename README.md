@@ -17,18 +17,28 @@ Edits go through the live notebook editor, not the `.ipynb` file on disk. Your k
 ## Setup
 
 1. Install the extension.
-2. Add the server to Claude Code once:
+2. Add the MCP server to your agent's configuration, once. On the first start the extension offers this for each agent CLI it finds installed (Claude Code, Codex, or both). You can also run **Notebook Live Edit MCP: Add MCP Server to Claude Code** or **... to Codex** from the command palette. Each runs that agent's `mcp add` command, shown below, in a terminal. Nothing gets installed.
+3. Open a notebook, open a new terminal in that VS Code window, and start the agent there.
 
-   ```sh
-   claude mcp add --transport http -s user notebook \
-     'http://127.0.0.1:${NOTEBOOK_LIVE_EDIT_PORT:-7337}/mcp' \
-     --header 'Authorization: Bearer ${NOTEBOOK_LIVE_EDIT_TOKEN}'
-   ```
+The extension sets `NOTEBOOK_LIVE_EDIT_PORT` and `NOTEBOOK_LIVE_EDIT_TOKEN` in the integrated terminals of each VS Code window. An agent started anywhere else won't have the token, and the server will refuse it.
 
-   Keep the single quotes, so the variables are expanded by Claude Code when it connects, not by your shell now.
-3. Open a notebook, open a new terminal in that VS Code window, and start Claude Code there.
+### Claude Code
 
-The extension sets `NOTEBOOK_LIVE_EDIT_PORT` and `NOTEBOOK_LIVE_EDIT_TOKEN` in VS Code's integrated terminals. Claude Code started anywhere else won't have the token, and the server will refuse it.
+```sh
+claude mcp add --transport http -s user notebook \
+  'http://127.0.0.1:${NOTEBOOK_LIVE_EDIT_PORT:-7337}/mcp' \
+  --header 'Authorization: Bearer ${NOTEBOOK_LIVE_EDIT_TOKEN}'
+```
+
+Keep the single quotes, so the variables are expanded by Claude Code when it connects, not by your shell now. Claude Code follows the port of the window it was started in, so it works with several windows open.
+
+### Codex
+
+```sh
+codex mcp add notebook --url http://127.0.0.1:7337/mcp --bearer-token-env-var NOTEBOOK_LIVE_EDIT_TOKEN
+```
+
+Codex can't read the port from an environment variable, so it always connects to port 7337, which belongs to the first VS Code window that opened. In other windows the token doesn't match and Codex gets an error instead of reaching the wrong notebook. To use Codex in another window, close the other windows or give that window's workspace a fixed `notebookLiveEdit.port` and add a second Codex server for it.
 
 ## Tools
 
@@ -46,7 +56,7 @@ The extension sets `NOTEBOOK_LIVE_EDIT_PORT` and `NOTEBOOK_LIVE_EDIT_TOKEN` in V
 
 ## Security
 
-The server listens on 127.0.0.1 only, so other machines cannot reach it. Every request must carry a random token that the extension creates once and keeps across reloads. Requests from web pages, which always send an `Origin` header, are rejected.
+The server listens on 127.0.0.1 only, so other machines cannot reach it. Every request must carry a random token. Each workspace gets its own, created once and kept across reloads, so an agent started in one VS Code window can't reach the notebooks of another. Requests from web pages, which always send an `Origin` header, are rejected.
 
 Anyone who has the token can run code in your kernel. It is visible to programs started from VS Code's terminals, and it is stored with VS Code's other extension data.
 

@@ -3,6 +3,9 @@
 const vscode = require('vscode');
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const MAX_TEXT = 20000;
 
@@ -366,11 +369,13 @@ function createServer(token) {
   return http.createServer((req, res) => {
     // Browsers always send Origin on cross-site requests; reject them so web pages can't drive the kernel.
     if (req.headers.origin) { res.writeHead(403).end(); return; }
-    // Other local processes can reach 127.0.0.1 too, so every request must carry this window's token.
+    // Other local processes, and agents started in other VS Code windows, can reach 127.0.0.1 too,
+    // so every request must carry this window's token.
     // 403, not 401: a 401 makes MCP clients start an OAuth flow this server does not offer.
     if (!authorized(req, token)) {
       res.writeHead(403, { 'Content-Type': 'text/plain' })
-        .end('Missing or wrong token. Start Claude Code from a VS Code terminal so it gets NOTEBOOK_LIVE_EDIT_TOKEN.');
+        .end('Missing or wrong token. Start the agent from a terminal of the VS Code window that has the notebook ' +
+          'open, so it gets that window\'s NOTEBOOK_LIVE_EDIT_TOKEN (and NOTEBOOK_LIVE_EDIT_PORT).');
       return;
     }
     if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }).end(); return; }
@@ -402,13 +407,44 @@ function listen(server, port) {
   });
 }
 
+// `mcp add` commands for each supported agent CLI, run in a terminal so the user sees them.
+// Claude Code expands ${VAR} in the URL, so it follows this window's port; Codex cannot, so it always uses
+// 7337 and gets a clean 403 (wrong token) when 7337 belongs to another window.
+const AGENTS = {
+  claude: {
+    label: 'Claude Code',
+    command: `claude mcp add --transport http -s user notebook 'http://127.0.0.1:\${NOTEBOOK_LIVE_EDIT_PORT:-7337}/mcp' --header 'Authorization: Bearer \${NOTEBOOK_LIVE_EDIT_TOKEN}'`,
+  },
+  codex: {
+    label: 'Codex',
+    command: 'codex mcp add notebook --url http://127.0.0.1:7337/mcp --bearer-token-env-var NOTEBOOK_LIVE_EDIT_TOKEN',
+  },
+};
+
+// Whether an executable is on PATH (plus ~/.local/bin, where both CLIs' installers put them).
+function installed(bin) {
+  const dirs = [...(process.env.PATH || '').split(path.delimiter), path.join(os.homedir(), '.local', 'bin')];
+  return dirs.some(dir => { try { fs.accessSync(path.join(dir, bin), fs.constants.X_OK); return true; } catch { return false; } });
+}
+
+function addMcpServer(agent) {
+  if (process.platform === 'win32') {
+    vscode.env.openExternal(vscode.Uri.parse('https://github.com/bwehlin/nbliveedit#setup'));
+    return;
+  }
+  const terminal = vscode.window.createTerminal(`Add Notebook Live Edit MCP server to ${AGENTS[agent].label}`);
+  terminal.show();
+  terminal.sendText(AGENTS[agent].command);
+}
+
 async function activate(context) {
   const preferred = vscode.workspace.getConfiguration('notebookLiveEdit').get('port', 7337);
-  // Generated once and kept across reloads, so a reload doesn't invalidate running Claude Code sessions.
-  let token = context.globalState.get('token');
+  // One token per workspace, kept across reloads: a reload doesn't cut off running agent sessions, and an
+  // agent started in another window (whose token differs) is refused instead of editing the wrong notebook.
+  let token = context.workspaceState.get('token');
   if (!token) {
     token = crypto.randomBytes(32).toString('hex');
-    await context.globalState.update('token', token);
+    await context.workspaceState.update('token', token);
   }
   const server = createServer(token);
   context.subscriptions.push({ dispose: () => server.close() });
@@ -420,6 +456,18 @@ async function activate(context) {
     context.environmentVariableCollection.replace('NOTEBOOK_LIVE_EDIT_PORT', String(port));
   } catch (e) {
     vscode.window.showErrorMessage(`Notebook Live Edit MCP: could not listen on 127.0.0.1: ${e.message}`);
+  }
+  for (const agent of Object.keys(AGENTS))
+    context.subscriptions.push(vscode.commands.registerCommand(`notebookLiveEdit.addTo.${agent}`, () => addMcpServer(agent)));
+  // Offer once, and only for the agent CLIs that are actually installed.
+  const found = Object.keys(AGENTS).filter(installed);
+  if (found.length && !context.globalState.get('setupOffered')) {
+    await context.globalState.update('setupOffered', true);
+    const buttons = found.map(agent => `Add to ${AGENTS[agent].label}`);
+    vscode.window.showInformationMessage(
+      `Notebook Live Edit MCP: add this MCP server to ${found.map(a => AGENTS[a].label).join(' and ')}? ` +
+      'Runs its `mcp add` command in a terminal.', ...buttons, 'Not now')
+      .then(choice => { const i = buttons.indexOf(choice); if (i >= 0) addMcpServer(found[i]); });
   }
   snapshotChanged = new vscode.EventEmitter();
   context.subscriptions.push(snapshotChanged, vscode.workspace.registerTextDocumentContentProvider('notebook-live-edit',
