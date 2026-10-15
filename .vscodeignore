@@ -1,3 +1,4 @@
 *.vsix
 test.js
 *.ipynb
+.gitignore

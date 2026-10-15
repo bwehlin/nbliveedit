@@ -1,12 +1,39 @@
 {
   "name": "notebook-live-edit-mcp",
   "displayName": "Notebook Live Edit MCP",
-  "description": "MCP server that lets LLMs edit and run cells in the open Jupyter notebook.",
-  "version": "0.0.1",
-  "publisher": "local",
-  "engines": { "vscode": "^1.90.0" },
+  "description": "MCP server that lets AI coding agents read, edit and run cells in the notebook open in VS Code, using its live kernel.",
+  "version": "0.1.0",
+  "publisher": "bwehlin",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bwehlin/nbliveedit"
+  },
+  "bugs": {
+    "url": "https://github.com/bwehlin/nbliveedit/issues"
+  },
+  "homepage": "https://github.com/bwehlin/nbliveedit#readme",
+  "categories": [
+    "Notebooks",
+    "AI",
+    "Data Science"
+  ],
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "notebook",
+    "ipynb",
+    "jupyter",
+    "claude code",
+    "agent"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
   "main": "./extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "configuration": {
       "title": "Notebook Live Edit MCP",

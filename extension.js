@@ -2,6 +2,7 @@
 // so edits go through the live notebook model instead of the .ipynb on disk.
 const vscode = require('vscode');
 const http = require('http');
+const crypto = require('crypto');
 
 const MAX_TEXT = 20000;
 
@@ -354,10 +355,24 @@ async function handleRpc(msg) {
   }
 }
 
-function createServer() {
+// Constant-time check of the "Authorization: Bearer <token>" header.
+function authorized(req, token) {
+  const got = Buffer.from(req.headers.authorization || '');
+  const want = Buffer.from(`Bearer ${token}`);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
+function createServer(token) {
   return http.createServer((req, res) => {
     // Browsers always send Origin on cross-site requests; reject them so web pages can't drive the kernel.
     if (req.headers.origin) { res.writeHead(403).end(); return; }
+    // Other local processes can reach 127.0.0.1 too, so every request must carry this window's token.
+    // 403, not 401: a 401 makes MCP clients start an OAuth flow this server does not offer.
+    if (!authorized(req, token)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' })
+        .end('Missing or wrong token. Start Claude Code from a VS Code terminal so it gets NOTEBOOK_LIVE_EDIT_TOKEN.');
+      return;
+    }
     if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }).end(); return; }
     let body = '';
     req.on('data', c => { body += c; });
@@ -389,12 +404,19 @@ function listen(server, port) {
 
 async function activate(context) {
   const preferred = vscode.workspace.getConfiguration('notebookLiveEdit').get('port', 7337);
-  const server = createServer();
+  // Generated once and kept across reloads, so a reload doesn't invalidate running Claude Code sessions.
+  let token = context.globalState.get('token');
+  if (!token) {
+    token = crypto.randomBytes(32).toString('hex');
+    await context.globalState.update('token', token);
+  }
+  const server = createServer(token);
   context.subscriptions.push({ dispose: () => server.close() });
+  // Terminals of this window (where Claude Code runs) learn the token and which port belongs to this window;
+  // the MCP config reads them as ${NOTEBOOK_LIVE_EDIT_PORT:-7337} and ${NOTEBOOK_LIVE_EDIT_TOKEN}.
+  context.environmentVariableCollection.replace('NOTEBOOK_LIVE_EDIT_TOKEN', token);
   try {
     const port = await listen(server, preferred);
-    // Terminals of this window (where Claude Code runs) learn which port belongs to this window;
-    // the MCP config reads it as ${NOTEBOOK_LIVE_EDIT_PORT:-7337}.
     context.environmentVariableCollection.replace('NOTEBOOK_LIVE_EDIT_PORT', String(port));
   } catch (e) {
     vscode.window.showErrorMessage(`Notebook Live Edit MCP: could not listen on 127.0.0.1: ${e.message}`);

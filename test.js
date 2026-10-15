@@ -30,13 +30,13 @@ const { createServer, lineDiff, listen } = require('./extension');
 
 async function rpc(port, body, headers = {}) {
   const r = await fetch(`http://127.0.0.1:${port}/mcp`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-token', ...headers }, body: JSON.stringify(body),
   });
   return { status: r.status, json: r.status === 200 ? await r.json() : null };
 }
 
 (async () => {
-  const server = createServer().listen(0, '127.0.0.1');
+  const server = createServer('test-token').listen(0, '127.0.0.1');
   await new Promise(r => server.on('listening', r));
   const port = server.address().port;
 
@@ -89,6 +89,12 @@ async function rpc(port, body, headers = {}) {
   r = await rpc(port, { jsonrpc: '2.0', id: 6, method: 'tools/list' }, { Origin: 'https://evil.example' });
   assert.strictEqual(r.status, 403);
 
+  // Local processes without the token are refused, including a wrong token of the same length.
+  r = await rpc(port, { jsonrpc: '2.0', id: 7, method: 'tools/list' }, { Authorization: '' });
+  assert.strictEqual(r.status, 403);
+  r = await rpc(port, { jsonrpc: '2.0', id: 8, method: 'tools/list' }, { Authorization: 'Bearer test-tokem' });
+  assert.strictEqual(r.status, 403);
+
   // A run that outlives its wait reports RUNNING with partial output instead of hanging past Claude Code's timeout.
   const call = (id, name, args) => rpc(port, { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
   cells[0].outputs = [{ items: [item('application/vnd.code.notebook.stdout', 'partial\n')] }];
@@ -116,7 +122,7 @@ async function rpc(port, body, headers = {}) {
   assert.strictEqual(lineDiff('x', 'x'), '');
 
   // Port fallback: preferred port taken by another window -> some other free port.
-  const other = createServer();
+  const other = createServer('test-token');
   const second = await listen(other, port);
   assert.ok(second > 0 && second !== port);
   other.close();
