@@ -2,7 +2,7 @@
   "name": "notebook-live-edit-mcp",
   "displayName": "Notebook Live Edit MCP",
   "description": "MCP server that lets AI coding agents read, edit and run cells in the notebook open in VS Code, using its live kernel.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "bwehlin",
   "license": "Apache-2.0",
   "repository": {
