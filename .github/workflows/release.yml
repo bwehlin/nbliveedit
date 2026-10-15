@@ -1,0 +1,45 @@
+# Builds the version in package.json into a .vsix and publishes it as a GitHub release tagged v<version>.
+# Run it from the Actions tab (Release > Run workflow) after bumping "version" in package.json, then upload
+# the .vsix from the release at https://marketplace.visualstudio.com/manage (publisher bwehlin).
+# No Marketplace token needed: Azure DevOps retires the global PATs that `vsce publish` uses on 2026-12-01.
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # to create the release and its tag
+
+jobs:
+  release:
+    # Only the maintainer may start a release.
+    if: github.actor == 'bwehlin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check version is not released yet
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version is already tagged; bump \"version\" in package.json first." >&2
+            exit 1
+          fi
+
+      - name: Self-check
+        run: node test.js
+
+      - name: Package
+        run: npx --yes @vscode/vsce package -o "notebook-live-edit-mcp-$VERSION.vsix"
+
+      - name: Create release and tag
+        run: >
+          gh release create "v$VERSION" "notebook-live-edit-mcp-$VERSION.vsix"
+          --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
