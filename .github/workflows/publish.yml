@@ -1,6 +1,6 @@
 # Publishes the version in package.json to the VS Code Marketplace, then tags the commit as v<version>.
 # Run it from the Actions tab (Publish > Run workflow) after bumping "version" in package.json.
-# Needs the repository secret VSCE_PAT (Azure DevOps token with Marketplace "Manage" scope).
+# Needs the secret VSCE_PAT (Azure DevOps token with Marketplace "Manage" scope) in the "release" environment.
 name: Publish
 
 on:
@@ -11,6 +11,10 @@ permissions:
 
 jobs:
   publish:
+    # Only the maintainer may start a release.
+    if: github.actor == 'bwehlin'
+    # VSCE_PAT lives in this environment, which requires approval from bwehlin and only allows main.
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
