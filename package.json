@@ -1,0 +1,22 @@
+{
+  "name": "notebook-live-edit-mcp",
+  "displayName": "Notebook Live Edit MCP",
+  "description": "MCP server that lets LLMs edit and run cells in the open Jupyter notebook.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": { "vscode": "^1.90.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "configuration": {
+      "title": "Notebook Live Edit MCP",
+      "properties": {
+        "notebookLiveEdit.port": {
+          "type": "number",
+          "default": 7337,
+          "description": "Port for the MCP HTTP server (bound to 127.0.0.1). Reload window after changing."
+        }
+      }
+    }
+  }
+}

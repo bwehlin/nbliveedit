@@ -1,0 +1,8 @@
+# Packaged extension (build output of `vsce package`)
+*.vsix
+
+node_modules/
+
+# Scratch notebooks used for manual testing
+*.ipynb
+.ipynb_checkpoints/
